@@ -3,6 +3,7 @@
 """Digest-addressed public source artifact, built from the installed worker SDK."""
 from dataclasses import fields, MISSING
 import hashlib
+import inspect
 import json
 from pathlib import Path
 
@@ -36,7 +37,7 @@ def compile_plan_schema():
             if field.default is MISSING: required.append(field.name)
             else: item['default'] = field.default
             properties[field.name] = item
-        return {'description': cls.__doc__, 'type': 'object', 'properties': properties, 'required': required, 'additionalProperties': False}
+        return {'description': inspect.cleandoc(cls.__doc__ or ''), 'type': 'object', 'properties': properties, 'required': required, 'additionalProperties': False}
     return {'$schema': 'https://json-schema.org/draft/2020-12/schema', **schema(CompilePlan)}
 
 
