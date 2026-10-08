@@ -6,7 +6,7 @@ ABI used by deployed Cardinal runtimes. This repository owns `TraceView`,
 profiles, and CompilePlan review metadata. It has no third-party runtime dependencies.
 
 The execution host supplies the sandbox, JEV provider and credentials, persistence,
-and workers. Those private components are maintained by LakeRunner. The SDK does
+and workers. Those private components are maintained by Lakerunner. The SDK does
 not include a local semantic evaluator, compiler service, or deployment launcher.
 
 ## Authoring
@@ -36,7 +36,7 @@ python3 -m unittest discover -s tests -v
 ```
 
 Tagged releases attach `behavior-sdk-<sha256>.json` and `SHA256SUMS`. Consumers pin
-an immutable source commit and artifact digest. LakeRunner consumes that exact immutable release artifact, verifies its digest,
+an immutable source commit and artifact digest. Lakerunner consumes that exact immutable release artifact, verifies its digest,
 and materializes its files only as an ignored build/development dependency. It
 keeps no separately maintained or tracked SDK source copy. Changes originate here;
 compiler and execution workers use the same pinned artifact.
