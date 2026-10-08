@@ -86,6 +86,34 @@ class Decision:
     reason: str
     receipt: Mapping[str, Any] = field(compare=False)
 
+    @property
+    def yes(self):
+        return self.verdict == Verdict.YES
+
+    @property
+    def no(self):
+        return self.verdict == Verdict.NO
+
+    @property
+    def uncertain(self):
+        return self.verdict == Verdict.UNCERTAIN
+
+    def __bool__(self):
+        raise TypeError("Decision is tri-state; inspect yes, no, or uncertain explicitly")
+
+
+@dataclass(frozen=True)
+class PacketCheck:
+    """Exact mechanical preflight; invalid provenance still raises PacketError."""
+    fits: bool
+    reasons: tuple[str, ...]
+    item_count: int
+    packet_chars: int
+    request_bytes: int
+
+    def __bool__(self):
+        raise TypeError("inspect PacketCheck.fits explicitly")
+
 
 class JudgeBackend(Protocol):
     """Backend receives one fixed-format request and returns a model response.
@@ -144,6 +172,55 @@ def _parse_reply(text: str, items: tuple[EvidenceItem, ...]) -> tuple[Verdict, t
     return verdict, tuple(dict.fromkeys(items[n - 1].ref for n in refs)), reason
 
 
+def _prepare_packet(trace, config, proposition, evidence, subject_refs, frame):
+    events = {e.id: e for e in trace.events}
+    def resolve(ref):
+        if ref == "run":
+            return trace, True
+        if ref not in events:
+            raise PacketError(f"unknown trace ref {ref!r}")
+        return events[ref], False
+    reasons = []
+    if not isinstance(proposition, str) or not proposition or len(proposition) > 1_000:
+        raise PacketError("proposition must contain 1-1000 characters")
+    if not isinstance(frame, str) or len(frame) > 600:
+        raise PacketError("frame must contain at most 600 characters")
+    items = tuple(evidence)
+    if not 1 <= len(items) <= config.max_items:
+        reasons.append("item_limit")
+    subjects = tuple(subject_refs)
+    for ref in subjects:
+        if not isinstance(ref, str):
+            raise PacketError("subject refs must be strings")
+        resolve(ref)
+    for item in items:
+        if not isinstance(item, EvidenceItem) or not isinstance(item.text, str):
+            raise PacketError("evidence items must be EvidenceItem(ref, field, text)")
+        source, is_trace = resolve(item.ref)
+        if item.text not in _field_text(source, item.field, is_trace=is_trace):
+            raise PacketError(f"evidence is not a verbatim substring of {item.ref}.{item.field}")
+    packet = {"proposition": proposition, "frame": frame, "subject_refs": subjects,
+              "evidence": [{"ref": i.ref, "field": i.field, "text": i.text} for i in items]}
+    chars = len(proposition) + len(frame) + sum(len(i.text) for i in items)
+    if chars > config.max_packet_chars:
+        reasons.append("packet_chars_limit")
+    request = {"task": "bounded_decision", "trace_id": trace.trace_id,
+               "prompt_version": config.prompt_version,
+               "config_digest": config.digest,
+               "model": config.model, "model_version": config.model_version,
+               "max_input_tokens": config.max_input_tokens,
+               "max_output_tokens": config.max_output_tokens,
+               "instruction": "Return only JSON with answer (YES, NO, UNCERTAIN), evidence_refs (1-based item numbers), and short_reason (at most 300 characters).",
+               "packet": packet}
+    # A token can encode only part of a Unicode character; bound UTF-8 bytes,
+    # not Python code points. Count the full
+    # serialized request, including the fixed instruction and source refs.
+    if len(_canonical(request).encode("utf-8")) > config.max_input_tokens:
+        reasons.append("request_bytes_limit")
+    check = PacketCheck(not reasons, tuple(reasons), len(items), chars, len(_canonical(request).encode("utf-8")))
+    return packet, request, check
+
+
 class JEV:
     """Public bounded decision ABI, shared by direct and sandbox transports."""
 
@@ -151,6 +228,15 @@ class JEV:
                subject_refs: list[str] | tuple[str, ...] = (), frame: str = "") -> Decision:
         return self._decide(proposition=proposition, evidence=evidence,
                             subject_refs=subject_refs, frame=frame)
+
+    def preflight(self, *, proposition, evidence, subject_refs=(), frame="") -> PacketCheck:
+        """No model call, truncation, or verdict. Uses exactly decide's packet checks.
+
+        An exhausted model-call budget is a separate execution concern. Hosts
+        expose trace/config on their JEV proxy; preflight never consumes budget.
+        """
+        return _prepare_packet(self.trace, self.config, proposition, tuple(evidence),
+                               tuple(subject_refs), frame)[2]
 
 
 class Judge(JEV):
@@ -180,47 +266,19 @@ class Judge(JEV):
 
     def _decide(self, *, proposition: str, evidence: list[EvidenceItem] | tuple[EvidenceItem, ...],
                subject_refs: list[str] | tuple[str, ...] = (), frame: str = "") -> Decision:
-        if not isinstance(proposition, str) or not proposition or len(proposition) > 1_000:
-            raise PacketError("proposition must contain 1-1000 characters")
-        if not isinstance(frame, str) or len(frame) > 600:
-            raise PacketError("frame must contain at most 600 characters")
         items = tuple(evidence)
-        if not 1 <= len(items) <= self.config.max_items:
-            raise PacketError(f"evidence must contain 1-{self.config.max_items} items")
-        subjects = tuple(subject_refs)
-        for ref in subjects:
-            if not isinstance(ref, str):
-                raise PacketError("subject refs must be strings")
-            self._source(ref)
-        for item in items:
-            if not isinstance(item, EvidenceItem) or not isinstance(item.text, str):
-                raise PacketError("evidence items must be EvidenceItem(ref, field, text)")
-            source, is_trace = self._source(item.ref)
-            if item.text not in _field_text(source, item.field, is_trace=is_trace):
-                raise PacketError(f"evidence is not a verbatim substring of {item.ref}.{item.field}")
-        packet = {"proposition": proposition, "frame": frame, "subject_refs": subjects,
-                  "evidence": [{"ref": i.ref, "field": i.field, "text": i.text} for i in items]}
-        chars = len(proposition) + len(frame) + sum(len(i.text) for i in items)
-        if chars > self.config.max_packet_chars:
-            raise PacketError("evidence packet exceeds configured character limit")
+        packet, request, check = _prepare_packet(self.trace, self.config, proposition, items, subject_refs, frame)
+        subjects = packet["subject_refs"]
+        if not check.fits:
+            messages = {"item_limit": f"evidence must contain 1-{self.config.max_items} items",
+                        "packet_chars_limit": "evidence packet exceeds configured character limit",
+                        "request_bytes_limit": "judge request exceeds conservative input token limit"}
+            raise PacketError("; ".join(messages[reason] for reason in check.reasons))
         packet_hash = _sha(packet)
         if packet_hash in self._cache:
             return self._cache[packet_hash]
         if len(self.receipts) >= self.config.max_calls:
             raise JudgeBudgetExceeded("decision-call budget exceeded for this trace")
-        request = {"task": "bounded_decision", "trace_id": self.trace.trace_id,
-                   "prompt_version": self.config.prompt_version,
-                   "config_digest": self.config.digest,
-                   "model": self.config.model, "model_version": self.config.model_version,
-                   "max_input_tokens": self.config.max_input_tokens,
-                   "max_output_tokens": self.config.max_output_tokens,
-                   "instruction": "Return only JSON with answer (YES, NO, UNCERTAIN), evidence_refs (1-based item numbers), and short_reason (at most 300 characters).",
-                   "packet": packet}
-        # A token can encode only part of a Unicode character; bound UTF-8 bytes,
-        # not Python code points. Count the full
-        # serialized request, including the fixed instruction and source refs.
-        if len(_canonical(request).encode("utf-8")) > self.config.max_input_tokens:
-            raise PacketError("judge request exceeds conservative input token limit")
         request_hash = _sha(request)
         attempts: list[dict[str, Any]] = []
         verdict, refs, reason = Verdict.UNCERTAIN, (), "judge unavailable"

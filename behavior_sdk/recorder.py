@@ -94,6 +94,19 @@ class Recorder:
         """The UDF could not decide (missing data, malformed trace). Not a violation."""
         self._add({"op": "error", "reason": reason, "events": self._ev(events)})
 
+    def unknown(self, reason: str, events=None):
+        """Semantic/missing-evidence UNKNOWN. Retains the legacy error wire record.
+
+        Operational exceptions must propagate; they are host ERROR results.
+        """
+        self.error(reason, events)
+
+    def assessment(self, *, proof: Mapping, verdict: str):
+        """Receipt composition emitted by record_decision; host validates the proof."""
+        if verdict not in {"YES", "NO", "UNCERTAIN"}:
+            raise ValueError("unsupported assessment verdict")
+        self._add({"op": "assessment", "proof": dict(proof), "verdict": verdict})
+
     # --- measurements -------------------------------------------------------
     def counter(self, name: str, value: float = 1, *, unit: str = "1", events=None,
                 bindings: Mapping[str, Scalar] | None = None):

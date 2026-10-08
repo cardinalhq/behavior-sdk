@@ -89,7 +89,29 @@ class TraceView:
             raise TypeError("profile must be a Profile or registered profile name")
         self.finalized = bool(finalized)
         self.events = tuple(sorted(self.trace.events, key=lambda event: event.seq))
+        if len({e.id for e in self.events}) != len(self.events) or "run" in {e.id for e in self.events}:
+            raise ValueError("event identities must be unique and must not use reserved ref run")
+        if any(type(e.seq) is not int or e.seq < 0 for e in self.events) or len({e.seq for e in self.events}) != len(self.events):
+            raise ValueError("event sequences must be unique nonnegative integers")
+        self._events_by_id = {e.id: e for e in self.events}
         self._calls: tuple[Call, ...] | None = None
+
+    def event(self, ref: str | Event) -> Event:
+        """Resolve a local occurrence; reject foreign objects and unknown refs."""
+        event = self._events_by_id.get(ref if isinstance(ref, str) else ref.id)
+        if event is None or (not isinstance(ref, str) and event is not ref):
+            raise ValueError("event does not belong to this trace view")
+        return event
+
+    def select(self, *, kind: str | None = None, name: str | None = None):
+        from .selection import EventSelection
+        return EventSelection(self, self.events).select(kind=kind, name=name)
+
+    def before(self, ref):
+        return self.select().before(ref)
+
+    def after(self, ref):
+        return self.select().after(ref)
 
     @property
     def coverage_gaps(self) -> tuple[CoverageGap, ...]:

@@ -41,6 +41,7 @@ class Profile:
     id: str
     version: str
     digest: str
+    availability_policy: str = "unknown"
 
     @property
     def name(self) -> str:
@@ -66,6 +67,26 @@ class Profile:
 
     def coverage_gaps(self, run: TraceView) -> Iterable[CoverageGap]:
         return ()
+
+    def available_before(self, event, field, target, anchor):
+        """Recorded temporal ordering, never semantic authority or agent knowledge.
+
+        sequence: converter guarantees each occurrence's fields are available at
+        its unique seq. span-ns: input/name at start, output/error at end.
+        unknown: this profile supplies no field-availability guarantee.
+        """
+        if getattr(event, field) is None:
+            return None
+        if self.availability_policy == "sequence":
+            return event.seq < target.seq
+        if self.availability_policy != "span-ns":
+            return None
+        source_key = "end_tsns" if field in {"output", "error"} else "chq_tsns"
+        target_key = "end_tsns" if anchor == "end" else "chq_tsns"
+        source_time, target_time = event.attrs.get(source_key), target.attrs.get(target_key)
+        if type(source_time) is not int or type(target_time) is not int or source_time == target_time:
+            return None
+        return source_time < target_time
 
 
 def _api_calls(source: str) -> list[tuple[str, dict[str, Any]]]:
