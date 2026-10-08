@@ -12,6 +12,7 @@ from behavior_sdk.native_profile import NativeProfile
 from behavior_sdk.profiles import Profile
 from behavior_sdk.logic import unresolved_uncertainty
 from behavior_sdk.contract import CompilePlan, ContractClause, JudgeSite
+from behavior_sdk.selection import EventSelection
 
 
 def run(events=None, profile=None):
@@ -48,6 +49,17 @@ class StructuralTests(unittest.TestCase):
             events = [dict(id="a", seq=0, kind="tool"), dict(id="b", seq=1, kind="tool")]
             events[1][field] = value
             with self.assertRaises(ValueError): run(events)
+
+    def test_direct_selection_preserves_local_ordered_immutable_occurrences(self):
+        r = run()
+        events = list(r.events)
+        selected = EventSelection(r, events)
+        events.clear()
+        self.assertEqual(selected.refs, ("a", "b", "c"))
+        for invalid in ((replace(r.events[0]),), (r.events[1], r.events[0]),
+                        (r.events[0], r.events[0])):
+            with self.assertRaises(ValueError): EventSelection(r, invalid)
+        with self.assertRaises(ValueError): selected[::-1]
 
     def test_sequence_before_does_not_leak_future_result(self):
         r = run()
@@ -92,6 +104,13 @@ class StructuralTests(unittest.TestCase):
         with self.assertRaises(PacketError):
             judge(r.trace).preflight(proposition="test", evidence=[replace(items[0], text="forged")])
         with self.assertRaises(TypeError): EvidenceSet.from_events(r.events, fields="output")
+
+    def test_field_iterator_is_applied_to_every_event(self):
+        r = run()
+        expected = EvidenceSet.from_events(r.events, fields=("name", "output"))
+        actual = EvidenceSet.from_events(iter(r.events), fields=iter(("name", "output")))
+        self.assertEqual(actual, expected)
+        self.assertEqual(actual.refs, ("a", "b", "c"))
 
     def test_preflight_exactly_matches_execution_bounds(self):
         r = run()

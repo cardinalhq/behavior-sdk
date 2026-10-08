@@ -41,6 +41,7 @@ class EvidenceSet(Sequence):
         """Select exact original fields; skip null fields unless explicitly requested."""
         if isinstance(fields, str):
             raise TypeError("fields must be a sequence, not a string")
+        fields = tuple(fields)
         items = []
         for event in events:
             for field in fields:

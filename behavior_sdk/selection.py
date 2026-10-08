@@ -11,6 +11,14 @@ class EventSelection(Sequence):
     run: object
     events: tuple
 
+    def __post_init__(self):
+        events = tuple(self.events)
+        for event in events:
+            self.run.event(event)
+        if any(left.seq >= right.seq for left, right in zip(events, events[1:])):
+            raise ValueError("selections require distinct events in canonical sequence order")
+        object.__setattr__(self, "events", events)
+
     def __len__(self):
         return len(self.events)
 

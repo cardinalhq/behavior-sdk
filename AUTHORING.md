@@ -26,6 +26,8 @@ Do not infer trace-wide absence or terminal completion from that window alone.
 Structural substrate v0.2 (ordinary Python; broad JEV remains supported):
 run.select(kind=..., name=...) selects occurrences mechanically. Selections
 support before(ref), after(ref), earliest(), latest(), slicing, and refs.
+Selections require distinct local events in canonical sequence order; reversed
+slices are rejected rather than changing the meaning of earliest/latest.
 before/after compare canonical sequence only; latest/earliest return None when
 empty and never imply authority, completeness, or business finality.
 selection.available_before(ref, field="output", anchor="start") returns events
