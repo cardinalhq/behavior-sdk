@@ -22,7 +22,7 @@ def adapter_digest():
 
 class NativeProfile(Profile):
     def __init__(self):
-        super().__init__('lakerunner-native-spans', 'v1', adapter_digest())
+        super().__init__('lakerunner-native-spans', 'v1', adapter_digest(), 'span-ns')
 
     def calls(self, run):
         for event in run.events:

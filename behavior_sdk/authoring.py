@@ -33,7 +33,7 @@ def compile_plan_schema():
                 item = {'type': 'string'}
             if field.name == 'kind': item['enum'] = sorted(CLAUSE_KINDS)
             if field.name == 'selection_kind': item['const'] = 'mechanical'
-            if field.name == 'schema_version': item['const'] = 1
+            if field.name == 'schema_version': item['enum'] = [1, 2]
             if field.default is MISSING: required.append(field.name)
             else: item['default'] = field.default
             properties[field.name] = item

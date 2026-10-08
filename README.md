@@ -22,6 +22,18 @@ explicitly accept the immutable DiagnosticVersion before population execution.
 The runtime checks SDK, profile, and host identities; a newer SDK checkout does
 not replace the version your deployed runtime requires.
 
+Version 0.2 adds mechanical event selections, explicit field availability,
+ordered evidence sets with optional roles, shared packet preflight, tri-state
+decision composition, and individual CompilePlan obligations. Broad `JEV.decide`
+is unchanged. No semantic relation or behavior catalog is included.
+
+Hosts using composed decisions must replay `assessment` records and call
+`behavior_sdk.logic.unresolved_uncertainty(records, receipts)` when aggregating
+run uncertainty. Invalid proofs are execution errors. Sandbox profiles must carry
+the trusted `availability_policy`; unknown profiles must retain unknown availability.
+`Recorder.unknown` retains the existing `error` wire record. These additions require
+a new pinned SDK artifact and host identity; they do not upgrade accepted programs.
+
 ## Artifact and downstream pin
 
 `behavior_sdk/` is the only maintained implementation. The authoring artifact

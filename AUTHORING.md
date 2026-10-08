@@ -23,6 +23,55 @@ A profile transport outcome is not proof of business completion.
 The native profile covers selected window objects, not a complete conversation.
 Do not infer trace-wide absence or terminal completion from that window alone.
 
+Structural substrate v0.2 (ordinary Python; broad JEV remains supported):
+run.select(kind=..., name=...) selects occurrences mechanically. Selections
+support before(ref), after(ref), earliest(), latest(), slicing, and refs.
+Selections require distinct local events in canonical sequence order; reversed
+slices are rejected rather than changing the meaning of earliest/latest.
+before/after compare canonical sequence only; latest/earliest return None when
+empty and never imply authority, completeness, or business finality.
+selection.available_before(ref, field="output", anchor="start") returns events
+and unknown_refs using the profile's explicit availability_policy. Native span
+outputs become available at exact end_tsns, not at span start; equal/missing
+timestamps remain unresolved. This describes recorded time, not agent knowledge.
+Profiles with availability_policy="sequence" guarantee fields are available at
+their unique occurrence seq. Other profiles default to unknown availability.
+Keep distinct occurrence IDs even if payloads match. Profiles own normalization;
+never deduplicate events by text, tool name, arguments, or output equality.
+
+EvidenceSet.from_events(events, fields=("input", "output"), role="context")
+selects exact original fields and skips nulls by default. Use include_missing=True
+only deliberately. concat combines EvidenceSets in order; refs returns real IDs;
+frame is an optional structural role-to-item map, passed explicitly to JEV.
+There is no implicit Call-to-evidence conversion; select origin/result events and
+fields. Existing evidence(event, field), source_refs, and Evidence remain available.
+judge.preflight(proposition=..., evidence=..., subject_refs=..., frame=...)
+returns fits, reasons, item_count, packet_chars, request_bytes. It calls no model,
+never truncates, uses decide's exact checks, and rejects invalid provenance.
+It does not reserve or check remaining semantic-call budget.
+
+Decision.yes/no/uncertain are explicit predicates; bool(decision) raises.
+Branch on uncertain separately; not decision.yes includes uncertainty.
+all_of(*decisions, complete=True) and any_of(*decisions, complete=True) compose
+receipted judgments deterministically. NO disproves a conjunction, YES proves an
+existential. Otherwise UNCERTAIN or complete=False prevents a definite result.
+Empty complete all_of is YES; empty complete any_of is NO. Only set complete=True
+when the relevant candidate/premise set has actually been assessed.
+Record the terminal behavioral decision with record_decision, not intermediate
+positive relation judgments. Compositions retain leaf receipt proofs; a v0.2 host
+validates these before discharging irrelevant uncertainty. Unconsumed uncertain
+receipts still produce UNKNOWN. Recorder.unknown(reason, events) is the explicit
+semantic/missing-evidence API; it retains the legacy error wire record. Exceptions
+are execution ERROR and must propagate. A decisive independent match survives
+semantic uncertainty elsewhere, but operational failure still yields ERROR.
+
+CompilePlan v1 remains supported. V2 allows multiple clauses per kind, requires
+unique obligation_id values, optional judge_site links, and an implementation_anchor
+on each JudgeSite. validate_source checks function anchors and literal propositions
+at judge.decide calls (literal strings or module constants). It does not prove
+semantic equivalence. Represent each material exclusion and unknown branch as an
+individual source-linked obligation; plan prose is not executable policy.
+
 Native event start/end are float seconds; exact integer nanoseconds remain in
 attrs.chq_tsns and attrs.end_tsns. Use raw integers for exact chronology/durations.
 Avoid JavaScript number round-tripping of real epoch nanoseconds. This authored

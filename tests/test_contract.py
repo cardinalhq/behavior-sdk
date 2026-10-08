@@ -56,10 +56,10 @@ class ContractTests(unittest.TestCase):
     def test_schema_follows_contract_types_and_defaults(self):
         schema = compile_plan_schema()
         self.assertEqual(schema['properties']['schema_version']['type'], 'integer')
-        self.assertEqual(schema['properties']['schema_version']['const'], 1)
+        self.assertEqual(schema['properties']['schema_version']['enum'], [1, 2])
         self.assertFalse(schema['additionalProperties'])
         clauses = schema['properties']['clauses']['items']
-        self.assertEqual(set(clauses['required']), set(ContractClause.__dataclass_fields__))
+        self.assertEqual(set(clauses['required']), {name for name, f in ContractClause.__dataclass_fields__.items() if f.default is __import__('dataclasses').MISSING})
         self.assertEqual(schema['properties']['judge_sites']['default'], CompilePlan.__dataclass_fields__['judge_sites'].default)
         with self.assertRaises(ValueError):
             CompilePlan(clauses=())

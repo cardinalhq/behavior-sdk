@@ -30,10 +30,12 @@ def record_decision(recorder: Any, decision: Decision, items: Iterable[EvidenceI
         raise PacketError("decision references are outside supplied evidence")
     recorder.visit(refs, subject)
     witness = decision.evidence_refs or refs
+    if "composition" in decision.receipt:
+        recorder.assessment(proof=decision.receipt["composition"], verdict=decision.verdict.value)
     if decision.verdict == Verdict.YES:
         recorder.violation(witness=witness, reason=decision.reason)
     elif decision.verdict == Verdict.UNCERTAIN:
-        recorder.error(decision.reason, witness)
+        recorder.unknown(decision.reason, witness)
     elif decision.verdict != Verdict.NO:
         raise PacketError("unsupported semantic decision")
 
