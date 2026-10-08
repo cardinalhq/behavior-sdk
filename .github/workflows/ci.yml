@@ -1,0 +1,47 @@
+name: SDK contract
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python scripts/build_artifact.py --check --output dist
+      - run: python -m unittest discover -s tests -v
+      - run: python -m pip install --no-deps .
+      - name: Verify installed package has the canonical artifact
+        run: |
+          expected=$(python -c 'from behavior_sdk.authoring import artifact_digest; print(artifact_digest())')
+          actual=$(cd /tmp && python -c 'from behavior_sdk.authoring import artifact_digest; print(artifact_digest())')
+          test "$actual" = "$expected"
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: contract
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify release tag matches canonical package version
+        run: |
+          version=$(python -c 'from behavior_sdk import __version__; print(__version__)')
+          test "$GITHUB_REF_NAME" = "v$version"
+      - run: python scripts/build_artifact.py --check --output dist
+      - name: Publish immutable SDK authoring artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/behavior-sdk-*.json dist/SHA256SUMS --verify-tag --generate-notes
