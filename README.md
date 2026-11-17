@@ -15,6 +15,8 @@ Read [AUTHORING.md](AUTHORING.md), the real [public Python exports](behavior_sdk
 and the profile source. [The example](examples/clarification.py) is an executable
 `evaluate(run, recorder, judge)` function for the host runtime. Its CompilePlan
 schema is [generated from the public dataclasses](schemas/compile-plan.json).
+[Behavioral Programs examples](docs/BEHAVIORAL_PROGRAMS.md) walks through
+larger programs for coding and support agents.
 
 Use the installed Cardinal plugin to fetch the deployed artifact, compile your
 program, test real teaching trace IDs, inspect witnesses and JEV receipts, and
